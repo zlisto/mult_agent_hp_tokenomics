@@ -410,6 +410,43 @@ button.ghost {
   color: #ff8fc8;
 }
 
+.answer-body.markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.85rem 0 1rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  display: block;
+  overflow-x: auto;
+}
+
+.answer-body.markdown thead {
+  background: #1a1424;
+}
+
+.answer-body.markdown th,
+.answer-body.markdown td {
+  border: 1px solid #3a3048;
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+  min-width: 7rem;
+}
+
+.answer-body.markdown th {
+  color: #ffe6b8;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.answer-body.markdown td {
+  color: #f2e8d5;
+}
+
+.answer-body.markdown tbody tr:nth-child(even) {
+  background: rgba(255, 77, 166, 0.06);
+}
+
 .error {
   color: #ff8f8f;
 }

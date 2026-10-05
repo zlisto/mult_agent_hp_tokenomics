@@ -12,7 +12,7 @@ Copy `.env.example` → `.env`:
 
 ```
 PORTKEY_API_KEY=your_key
-MODEL_NAME=gpt-5.6-luna
+MODEL_NAME=gpt-6-luna
 ```
 
 ### 2. Backend

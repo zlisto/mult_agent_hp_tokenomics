@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { fetchHealth, fetchRoster, streamChat } from './api'
 import { BOOK_PROPS, Labubu } from './components/Labubu'
 import { playSpellComplete, playZap, unlockSpellAudio } from './spellSound'
@@ -69,6 +70,18 @@ function fmtTokens(u: unknown): string {
   const x = u as { input_tokens?: number; output_tokens?: number } | undefined
   if (!x || (!x.input_tokens && !x.output_tokens)) return ''
   return ` · ${x.input_tokens ?? 0} in / ${x.output_tokens ?? 0} out tok`
+}
+
+/** Untangle LLM-jammed GFM tables so remark-gfm can parse them. */
+function normalizeAnswerMarkdown(text: string): string {
+  let s = text.replace(/\r\n/g, '\n').trim()
+  // Separator row on its own line: "... | |---|---|---| | next"
+  s = s.replace(/\s*(\|(?:\s*:?-{3,}:?\s*\|)+)\s*/g, '\n$1\n')
+  // Split jammed data rows: "...last cell | | Next row..."
+  s = s.replace(/\|\s*\|(?=\s*[^|\s\-:])/g, '|\n|')
+  // Blank line before a table that follows prose
+  s = s.replace(/([^\n|])\n?(\|[^\n]+\|\n\|(?:\s*:?-{3,}:?\s*\|)+)/g, '$1\n\n$2')
+  return s.replace(/\n{3,}/g, '\n\n')
 }
 
 function summarize(ev: ProgressEvent): string {
@@ -152,6 +165,8 @@ export default function App() {
   const castRef = useRef<HTMLElement>(null)
   const boltSeq = useRef(0)
   const queueEnd = useRef<HTMLLIElement>(null)
+  /** Keep the viewport glued in place when the Final answer panel inserts above Live ops. */
+  const scrollLockRef = useRef<{ y: number; height: number } | null>(null)
 
   useEffect(() => {
     fetchRoster()
@@ -216,9 +231,22 @@ export default function App() {
     }
   }, [measure, specialists])
 
+  // Keep the agent-loop list pinned to the latest event without scrolling the page.
   useEffect(() => {
-    queueEnd.current?.scrollIntoView({ block: 'nearest' })
+    const end = queueEnd.current
+    const scroller = end?.closest('.log') as HTMLElement | null
+    if (!scroller) return
+    scroller.scrollTop = scroller.scrollHeight
   }, [events.length])
+
+  // When Final answer mounts above Live ops, compensate so the view does not jump down.
+  useLayoutEffect(() => {
+    const lock = scrollLockRef.current
+    if (!lock || busy || !(answer || error)) return
+    const delta = document.documentElement.scrollHeight - lock.height
+    if (delta !== 0) window.scrollTo(0, lock.y + delta)
+    scrollLockRef.current = null
+  }, [busy, answer, error])
 
   const rosterReady = useMemo(() => specialists.length > 0, [specialists])
   const accentOf = useCallback(
@@ -319,6 +347,10 @@ export default function App() {
 
     try {
       const result: ChatResult = await streamChat(message.trim(), handleEvent)
+      scrollLockRef.current = {
+        y: window.scrollY,
+        height: document.documentElement.scrollHeight,
+      }
       setAnswer(result.answer)
       setDelegations(result.delegations)
       const doneMap: Record<number, AgentStatus> = {}
@@ -328,6 +360,10 @@ export default function App() {
       setBookStatus(doneMap)
       void playSpellComplete()
     } catch (err) {
+      scrollLockRef.current = {
+        y: window.scrollY,
+        height: document.documentElement.scrollHeight,
+      }
       setError(err instanceof Error ? err.message : String(err))
       setBossStatus('error')
     } finally {
@@ -470,7 +506,7 @@ export default function App() {
             {error && <p className="error">{error}</p>}
             {!error && answer && (
               <div className="answer-body markdown" key={answer.slice(0, 48)}>
-                <Markdown>{answer}</Markdown>
+                <Markdown remarkPlugins={[remarkGfm]}>{normalizeAnswerMarkdown(answer)}</Markdown>
               </div>
             )}
             {totals && (
